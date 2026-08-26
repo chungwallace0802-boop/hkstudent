@@ -1,12 +1,12 @@
 /* ==========================================
-   NoteSync HK - Business Logic & UI Control
+   NoteSync HK - Business Logic & UI Control (Final)
    ========================================== */
 
 const SUPABASE_URL = "https://prlualxyvddrtpftumqo.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBybHVhbHh5dmRkcnRwZnR1bXFvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc3NTAzNjMsImV4cCI6MjEwMzMyNjM2M30.ZSCQDc9k7ypnSKuEdQewsdWKpcsa-bAMLETt_VoQUBQ";
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-// Hong Kong Specific Education Preset Data
+// Hong Kong Education Preset Data
 const HK_DATA = {
   primary: {
     institutions: ["喇沙小學", "拔萃小學", "瑪利諾修院學校(小學部)", "聖保羅男女中學附屬小學", "軒尼詩道官立小學", "油蠲天主教小學", "其他官立/資助/私立小學"],
@@ -22,8 +22,8 @@ const HK_DATA = {
   },
   university: {
     institutions: [
-      "香港大學 (HKU)", "香港中文大學 (CUHK)", "香港科技大學 (HKUST)", 
-      "香港理工大學 (PolyU)", "香港城市大學 (CityU)", "香港浸會大學 (HKBU)", 
+      "香港大學 (HKU)", "香港中文大學 (CUHK)", "香港科技大學 (HKUST)",
+      "香港理工大學 (PolyU)", "香港城市大學 (CityU)", "香港浸會大學 (HKBU)",
       "嶺南大學 (LN)", "香港教育大學 (EdUHK)", "香港都會大學 (HKMU)", "香港樹仁大學 (HKSYU)", "其他大專院校 / IVE / HKCC"
     ],
     subjects: [
@@ -73,12 +73,12 @@ function setupEventListeners() {
   document.getElementById('nav-logo').addEventListener('click', () => switchView('discovery'));
   document.getElementById('btn-back-discovery').addEventListener('click', () => switchView('discovery'));
 
-  // Auth Modal
+  // Auth
   document.getElementById('btn-auth').addEventListener('click', () => {
     if (currentUser) db.auth.signOut();
     else {
       document.getElementById('modal-auth').classList.remove('hidden');
-      setAuthMode('login'); // reset to login mode
+      setAuthMode('login');
     }
   });
   document.getElementById('btn-close-auth').addEventListener('click', () => document.getElementById('modal-auth').classList.add('hidden'));
@@ -88,8 +88,9 @@ function setupEventListeners() {
     setAuthMode(newMode);
   });
   document.getElementById('btn-google-auth').addEventListener('click', handleGoogleAuth);
+  document.getElementById('btn-forgot-password').addEventListener('click', handleForgotPassword);
 
-  // Nav Upload Trigger
+  // Upload trigger
   document.getElementById('btn-nav-upload').addEventListener('click', () => {
     if (!currentUser) {
       redirectAfterAuth = true;
@@ -99,7 +100,7 @@ function setupEventListeners() {
     }
   });
 
-  // Discovery Filters
+  // Filters
   document.getElementById('search-input').addEventListener('input', () => {
     clearTimeout(searchDebounceTimer);
     searchDebounceTimer = setTimeout(fetchNotes, 300);
@@ -122,16 +123,15 @@ function setupEventListeners() {
     });
   });
 
-  // Form Cascading Logic for HK Education Level
+  // Form cascading
   document.getElementById('form-level').addEventListener('change', (e) => {
     const lvl = e.target.value;
-    const bandGroup = document.getElementById('form-band-group');
-    bandGroup.classList.toggle('hidden', lvl !== 'secondary');
+    document.getElementById('form-band-group').classList.toggle('hidden', lvl !== 'secondary');
     populateFormDatalists(lvl);
     toggleInstitutionField(lvl);
   });
 
-  // Smart Dropzone
+  // Dropzone
   const dropzone = document.getElementById('dropzone');
   const fileInput = document.getElementById('file-input');
   dropzone.addEventListener('click', () => fileInput.click());
@@ -152,14 +152,14 @@ function setupEventListeners() {
   document.getElementById('upload-form').addEventListener('submit', handleUploadSubmit);
   document.getElementById('btn-cancel-upload').addEventListener('click', () => { resetUploadForm(); switchView('discovery'); });
 
-  // Reader Actions
+  // Reader
   document.getElementById('btn-download-file').addEventListener('click', triggerDownload);
   document.getElementById('btn-bookmark').addEventListener('click', () => {
     if (!currentUser) return document.getElementById('modal-auth').classList.remove('hidden');
     document.getElementById('btn-bookmark').textContent = '💖 已加入收藏';
   });
 
-  // Success Modal
+  // Success modal
   document.getElementById('btn-success-home').addEventListener('click', () => {
     document.getElementById('modal-success').classList.add('hidden');
     switchView('discovery');
@@ -203,16 +203,23 @@ async function handleAuthSubmit(e) {
     } else {
       result = await db.auth.signUp({ email, password });
     }
+
     if (result.error) {
-      errorEl.textContent = result.error.message;
+      let msg = result.error.message;
+      if (msg.includes('Invalid login credentials')) msg = '電郵或密碼錯誤，請重新輸入。若尚未註冊，請點擊「註冊新帳戶」。';
+      else if (msg.includes('Email not confirmed')) msg = '請先到你的電郵信箱點擊確認連結以啟用帳戶。';
+      else if (msg.includes('provider is not enabled')) msg = 'Google 登入尚未啟用，請管理員在 Supabase 中啟用 Google Provider。';
+      errorEl.textContent = msg;
       errorEl.classList.remove('hidden');
     } else {
-      // If sign-up with email confirmation, user may need to confirm
       if (authMode === 'register' && result.data.user && !result.data.session) {
         alert('註冊成功！請檢查你的電郵並點擊確認連結以啟用帳戶。');
         document.getElementById('modal-auth').classList.add('hidden');
       } else {
         document.getElementById('modal-auth').classList.add('hidden');
+        const { data: { session } } = await db.auth.getSession();
+        currentUser = session?.user || null;
+        document.getElementById('btn-auth').textContent = currentUser ? '登出' : '登入 / 註冊';
       }
     }
   } catch (err) {
@@ -222,14 +229,39 @@ async function handleAuthSubmit(e) {
 }
 
 async function handleGoogleAuth() {
+  const errorEl = document.getElementById('auth-error');
+  errorEl.classList.add('hidden');
   try {
     const { error } = await db.auth.signInWithOAuth({
       provider: 'google',
       options: { redirectTo: window.location.origin }
     });
-    if (error) throw error;
+    if (error) {
+      let msg = error.message;
+      if (msg.includes('provider is not enabled')) msg = 'Google 登入尚未啟用，請管理員在 Supabase 中啟用。';
+      errorEl.textContent = msg;
+      errorEl.classList.remove('hidden');
+    }
   } catch (err) {
-    alert('Google 登入失敗：' + err.message);
+    errorEl.textContent = err.message;
+    errorEl.classList.remove('hidden');
+  }
+}
+
+async function handleForgotPassword(e) {
+  e.preventDefault();
+  const email = document.getElementById('auth-email').value;
+  if (!email) {
+    alert('請先輸入你的電郵地址。');
+    return;
+  }
+  const { error } = await db.auth.resetPasswordForEmail(email, {
+    redirectTo: window.location.origin + '/reset-password.html'
+  });
+  if (error) {
+    alert('重設密碼失敗：' + error.message);
+  } else {
+    alert('重設密碼連結已發送至你的電郵，請檢查收件箱。');
   }
 }
 
@@ -243,17 +275,15 @@ function toggleInstitutionField(level) {
   } else {
     group.classList.add('hidden');
     input.required = false;
-    input.value = 'Not specified'; // default value for DB
+    input.value = 'Not specified';
   }
 }
 
-// ---- Filter and form datalist population ----
 function updateFilterOptions(level) {
   const instSelect = document.getElementById('filter-institution');
   const subjSelect = document.getElementById('filter-subject');
   instSelect.innerHTML = '<option value="">所有學校 / 院校</option>';
   subjSelect.innerHTML = '<option value="">所有科目</option>';
-
   if (level && HK_DATA[level]) {
     HK_DATA[level].institutions.forEach(i => instSelect.innerHTML += `<option value="${i}">${i}</option>`);
     HK_DATA[level].subjects.forEach(s => subjSelect.innerHTML += `<option value="${s}">${s}</option>`);
@@ -265,9 +295,7 @@ function populateFormDatalists(level) {
   const subjDatalist = document.getElementById('subject-options');
   instDatalist.innerHTML = '';
   subjDatalist.innerHTML = '';
-
   if (level && HK_DATA[level]) {
-    // Only populate institution datalist for university (others hidden)
     if (level === 'university') {
       HK_DATA[level].institutions.forEach(i => instDatalist.innerHTML += `<option value="${i}">`);
     }
@@ -292,7 +320,6 @@ async function fetchNotes() {
   if (search) {
     query = query.or(`title.ilike.%${search}%,institution.ilike.%${search}%,subject.ilike.%${search}%`);
   }
-
   query = query.order(activeSort, { ascending: false });
 
   const { data, error } = await query;
@@ -302,9 +329,8 @@ async function fetchNotes() {
 function renderNotesGrid(notes) {
   const grid = document.getElementById('notes-grid');
   grid.innerHTML = '';
-
   if (!notes || notes.length === 0) {
-    grid.innerHTML = `<div style="grid-column: 1/-1; text-align: center; color: var(--text-muted); padding: 3rem;">未有相關香港筆記，快成為第一個上傳的人！</div>`;
+    grid.innerHTML = `<div style="grid-column:1/-1; text-align:center; color:var(--text-muted); padding:3rem;">未有相關香港筆記，快成為第一個上傳的人！</div>`;
     return;
   }
 
@@ -313,12 +339,11 @@ function renderNotesGrid(notes) {
     card.className = 'note-card';
     card.onclick = () => openReader(note);
 
-    let levelBadge = 'badge-secondary-lvl';
-    let levelText = '中學';
+    let levelBadge = 'badge-secondary-lvl', levelText = '中學';
     if (note.education_level === 'primary') { levelBadge = 'badge-primary-lvl'; levelText = '小學'; }
     if (note.education_level === 'university') { levelBadge = 'badge-university-lvl'; levelText = '大專'; }
 
-    const bandHtml = (note.education_level === 'secondary' && note.band && note.band !== 'N/A') 
+    const bandHtml = (note.education_level === 'secondary' && note.band && note.band !== 'N/A')
       ? `<span class="badge badge-band">${note.band}</span>` : '';
 
     card.innerHTML = `
@@ -354,7 +379,6 @@ function handleFileSelect(file) {
     errEl.classList.remove('hidden');
     return;
   }
-
   if (file.size > 25 * 1024 * 1024) {
     errEl.textContent = '檔案大小不可大於 25MB！';
     errEl.classList.remove('hidden');
@@ -395,11 +419,7 @@ async function handleUploadSubmit(e) {
 
     let percent = 0;
     const interval = setInterval(() => {
-      if (percent < 90) {
-        percent += 15;
-        progressBar.style.width = `${percent}%`;
-        progressText.textContent = `${percent}%`;
-      }
+      if (percent < 90) { percent += 15; progressBar.style.width = `${percent}%`; progressText.textContent = `${percent}%`; }
     }, 100);
 
     const { error: storageErr } = await db.storage.from('notes_files').upload(filePath, selectedFile);
@@ -415,8 +435,6 @@ async function handleUploadSubmit(e) {
 
     const level = document.getElementById('form-level').value;
     const band = (level === 'secondary') ? document.getElementById('form-band').value : 'N/A';
-
-    // Institution: if hidden, value already set to 'Not specified'
     const institution = document.getElementById('form-institution').value || 'Not specified';
 
     const payload = {
@@ -452,7 +470,6 @@ function resetUploadForm() {
   document.getElementById('upload-form').reset();
   document.getElementById('title-counter').textContent = '0 / 100';
   document.getElementById('form-band-group').classList.add('hidden');
-  // Show institution group by default (will be hidden based on level in change event)
   document.getElementById('form-institution-group').classList.remove('hidden');
   document.getElementById('form-institution').required = true;
   document.getElementById('form-institution').value = '';
@@ -461,7 +478,6 @@ function resetUploadForm() {
 // ---- Reader and download ----
 async function openReader(note) {
   activeNote = note;
-  
   const levelBadge = document.getElementById('reader-level-badge');
   const bandBadge = document.getElementById('reader-band-badge');
 
@@ -503,7 +519,6 @@ async function openReader(note) {
     const text = await res.text();
     viewerBody.innerHTML = `<div class="markdown-body">${marked.parse(text)}</div>`;
   }
-
   switchView('reader');
 }
 
