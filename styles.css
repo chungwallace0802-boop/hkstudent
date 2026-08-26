@@ -89,7 +89,7 @@ body { background-color: var(--background); color: var(--text-main); line-height
 .markdown-body { background: white; color: black; width: 100%; height: 100%; padding: 2rem; overflow-y: auto; }
 .sidebar-panel { background: white; border-radius: var(--radius); border: 1px solid var(--border); padding: 1.5rem; display: flex; flex-direction: column; justify-content: space-between; }
 
-/* Google button additional style */
+/* Google button style */
 #btn-google-auth {
   background: white;
   border: 1px solid #dadce0;
