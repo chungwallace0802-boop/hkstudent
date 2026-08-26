@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NoteSync HK - 香港學生學術筆記共享平台</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+</head>
+<body>
+
+  <!-- Navbar -->
+  <header class="navbar">
+    <div class="logo" id="nav-logo">
+      <span>🇭🇰 NoteSync HK</span>
+    </div>
+    <div class="nav-actions">
+      <button class="btn btn-outline" id="btn-auth">登入 / 註冊</button>
+      <button class="btn btn-primary" id="btn-nav-upload">＋ 上傳筆記</button>
+    </div>
+  </header>
+
+  <main class="container">
+    
+    <!-- VIEW 1: DISCOVERY DASHBOARD -->
+    <section id="view-discovery">
+      <div class="search-banner">
+        <h1>香港學生專屬筆記庫：小學、DSE 考材、大專 Exam 溫習資源</h1>
+        <div class="search-bar-container">
+          <span class="search-icon">🔍</span>
+          <input type="text" class="search-input" id="search-input" placeholder="搜尋筆記標題、學校（如 HKU/皇仁）、科目（如 DSE 經濟、小學常識）...">
+        </div>
+      </div>
+
+      <div class="filter-bar">
+        <div class="filter-group">
+          <!-- 學習階段篩選 -->
+          <select class="select-control" id="filter-level">
+            <option value="">所有學習階段</option>
+            <option value="primary">🎒 小學 (Primary)</option>
+            <option value="secondary">🏫 中學 (Secondary)</option>
+            <option value="university">🎓 大專/八大 (University)</option>
+          </select>
+
+          <!-- 中學 Band 別篩選 (預設隱藏) -->
+          <select class="select-control hidden" id="filter-band">
+            <option value="">所有 Band 別</option>
+            <option value="Band 1">Band 1</option>
+            <option value="Band 2">Band 2</option>
+            <option value="Band 3">Band 3</option>
+          </select>
+
+          <!-- 動態學校與科目 -->
+          <select class="select-control" id="filter-institution">
+            <option value="">所有學校 / 院校</option>
+          </select>
+          <select class="select-control" id="filter-subject">
+            <option value="">所有科目</option>
+          </select>
+        </div>
+
+        <div class="tab-group">
+          <button class="tab-btn active" data-sort="created_at">最新上傳</button>
+          <button class="tab-btn" data-sort="download_count">最多下載</button>
+        </div>
+      </div>
+
+      <!-- Grid Cards View -->
+      <div class="notes-grid" id="notes-grid"></div>
+    </section>
+
+    <!-- VIEW 2: SMART UPLOAD WORKFLOW -->
+    <section id="view-upload" class="hidden">
+      <div class="upload-card">
+        <h2 style="margin-bottom: 1.5rem;">發布香港學術筆記</h2>
+        
+        <!-- Smart Dropzone -->
+        <div class="dropzone" id="dropzone">
+          <div id="dropzone-prompt">
+            <p style="font-size: 2rem; margin-bottom: 0.5rem;">📂</p>
+            <p style="font-size: 1.1rem; font-weight: 700;">點擊選擇筆記檔案，或直接拖曳至此處</p>
+            <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0.5rem;">
+              支援格式：PDF、PNG、JPG、Markdown (容量上限 25MB)
+            </p>
+          </div>
+          <input type="file" id="file-input" class="hidden" accept=".pdf,.png,.jpg,.jpeg,.md">
+        </div>
+
+        <div id="upload-error" class="hidden" style="color: var(--danger); font-size: 0.9rem; margin-bottom: 1rem;"></div>
+
+        <!-- Preview Card -->
+        <div class="preview-card hidden" id="file-preview-card">
+          <div style="display:flex; align-items:center; gap: 0.75rem;">
+            <span id="preview-icon" style="font-size: 1.5rem;">📄</span>
+            <div>
+              <p id="preview-filename" style="font-weight: 700; font-size: 0.95rem;"></p>
+              <p id="preview-filesize" style="font-size: 0.8rem; color: var(--text-muted);"></p>
+            </div>
+          </div>
+          <button class="btn btn-outline" id="btn-remove-file" style="padding: 0.25rem 0.5rem; font-size: 0.8rem;">重新選擇</button>
+        </div>
+
+        <!-- Structured Metadata Form -->
+        <form id="upload-form">
+          <div class="form-group">
+            <label for="form-title">筆記標題 <span style="color:red">*</span></label>
+            <input type="text" id="form-title" class="form-control" placeholder="例如：DSE 經濟核心 Micro重點整理 / HKU COMP2011 Final Note" required minlength="5" maxlength="100">
+            <div style="text-align: right; font-size: 0.75rem; color: var(--text-muted);" id="title-counter">0 / 100</div>
+          </div>
+
+          <!-- 1. 學習階段選擇 -->
+          <div class="form-group">
+            <label for="form-level">學習階段 <span style="color:red">*</span></label>
+            <select id="form-level" class="form-control" required>
+              <option value="">-- 請選擇學習階段 --</option>
+              <option value="primary">🎒 小學 (Primary School)</option>
+              <option value="secondary">🏫 中學 (Secondary School / DSE)</option>
+              <option value="university">🎓 大專 / 八大院校 (University & Higher Ed)</option>
+            </select>
+          </div>
+
+          <!-- 2. 中學 Band 別 (僅限中學顯示) -->
+          <div class="form-group hidden" id="form-band-group">
+            <label for="form-band">學校 Band 別 (選填 / 中學專用)</label>
+            <select id="form-band" class="form-control">
+              <option value="N/A">不提供 / 不適用</option>
+              <option value="Band 1">Band 1</option>
+              <option value="Band 2">Band 2</option>
+              <option value="Band 3">Band 3</option>
+            </select>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+            <!-- 3. 學校選擇 (連動 Datalist) -->
+            <div class="form-group">
+              <label for="form-institution">學校 / 院校名稱 <span style="color:red">*</span></label>
+              <input type="text" id="form-institution" class="form-control" list="institution-options" placeholder="請輸入或選擇學校" required>
+              <datalist id="institution-options"></datalist>
+            </div>
+
+            <!-- 4. 科目選擇 (連動 Datalist) -->
+            <div class="form-group">
+              <label for="form-subject">科目名稱 <span style="color:red">*</span></label>
+              <input type="text" id="form-subject" class="form-control" list="subject-options" placeholder="請選擇或輸入科目" required>
+              <datalist id="subject-options"></datalist>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="form-description">筆記補充說明 (選填)</label>
+            <textarea id="form-description" class="form-control" rows="3" placeholder="備註：包含試題分析、答題技巧、章節重點等..."></textarea>
+          </div>
+
+          <!-- Upload Progress -->
+          <div id="progress-container" class="hidden" style="margin-bottom: 1rem;">
+            <div style="display: flex; justify-content: space-between; font-size: 0.85rem; margin-bottom: 0.25rem;">
+              <span>上傳進度</span>
+              <span id="progress-text">0%</span>
+            </div>
+            <div style="width:100%; background:var(--border); height:8px; border-radius:4px; overflow:hidden;">
+              <div id="progress-bar" style="width:0%; background:var(--primary); height:100%; transition: width 0.2s;"></div>
+            </div>
+          </div>
+
+          <div style="display: flex; justify-content: flex-end; gap: 1rem;">
+            <button type="button" class="btn btn-outline" id="btn-cancel-upload">取消</button>
+            <button type="submit" class="btn btn-primary" id="btn-submit-upload">確認發布筆記</button>
+          </div>
+        </form>
+      </div>
+    </section>
+
+    <!-- VIEW 3: IMMERSIVE READER WORKFLOW -->
+    <section id="view-reader" class="hidden">
+      <div style="margin-bottom: 1rem;">
+        <button class="btn btn-outline" id="btn-back-discovery">← 返回搜尋列表</button>
+      </div>
+      <div class="reader-container">
+        <div class="viewer-panel">
+          <div class="viewer-body" id="viewer-body"></div>
+        </div>
+        <div class="sidebar-panel">
+          <div>
+            <div style="margin-bottom: 0.5rem;">
+              <span id="reader-level-badge" class="badge badge-secondary-lvl">中學</span>
+              <span id="reader-band-badge" class="badge badge-band hidden">Band 1</span>
+            </div>
+            <h2 id="reader-title" style="margin-bottom: 0.75rem; font-size: 1.3rem;">--</h2>
+            <div style="display:flex; gap:0.4rem; margin-bottom: 1rem; flex-wrap: wrap;">
+              <span id="reader-institution" class="tag">--</span>
+              <span id="reader-subject" class="tag">--</span>
+            </div>
+            <p id="reader-description" style="font-size: 0.9rem; color: var(--text-muted); line-height: 1.6; margin-bottom: 1.5rem;">--</p>
+          </div>
+          <div>
+            <div style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1rem;">
+              <p>下載次數：<span id="reader-downloads" style="font-weight:700; color:var(--text-main);">0</span> 次</p>
+              <p>發布日期：<span id="reader-date">--</span></p>
+            </div>
+            <button class="btn btn-primary" id="btn-download-file" style="width: 100%; justify-content: center; margin-bottom: 0.5rem;">📥 下載原始檔案</button>
+            <button class="btn btn-outline" id="btn-bookmark" style="width: 100%; justify-content: center;">🤍 加入收藏</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Modals -->
+  <div class="modal-overlay hidden" id="modal-auth">
+    <div class="modal-content">
+      <h3>登入 NoteSync HK</h3>
+      <p style="font-size: 0.85rem; color: var(--text-muted); margin: 0.5rem 0 1rem 0;">請先登入以發布筆記並維護高質素香港社群資源。</p>
+      <form id="auth-form">
+        <div class="form-group"><label>Email</label><input type="email" id="auth-email" class="form-control" required placeholder="student@connect.hku.hk"></div>
+        <div class="form-group"><label>密碼</label><input type="password" id="auth-password" class="form-control" required minlength="6"></div>
+        <div style="display:flex; justify-content:flex-end; gap:0.5rem; margin-top: 1.5rem;">
+          <button type="button" class="btn btn-outline" id="btn-close-auth">取消</button>
+          <button type="submit" class="btn btn-primary">登入 / 註冊</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="modal-overlay hidden" id="modal-success">
+    <div class="modal-content" style="text-align: center;">
+      <p style="font-size: 3rem;">🎉</p>
+      <h3>筆記成功發布！</h3>
+      <p style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 1.5rem;">多謝你的無私分享，為香港同學提供極有價值的溫習資源！</p>
+      <div style="display:flex; flex-direction:column; gap:0.5rem;">
+        <button class="btn btn-primary" id="btn-success-view" style="justify-content:center;">即時預覽剛發布的筆記</button>
+        <button class="btn btn-outline" id="btn-success-home" style="justify-content:center;">返回首頁探索更多資源</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
